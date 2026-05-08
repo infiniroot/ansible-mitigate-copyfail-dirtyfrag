@@ -1,0 +1,157 @@
+---
+- name: ANSIBLE - Mitigate CopyFail (CVE-2026-31431) and DirtyFrag (CVE-2026-43284) vulnerabilities - Infiniroot GmbH
+  hosts: '{{ target }}'
+  become: yes
+  become_user: root
+  tasks:
+
+  ##########################
+  # Checks before doing anything
+  ##########################
+  - name: CHECK - Gather installed package facts
+    package_facts:
+      manager: auto
+
+  - name: CHECK - Set fact if a Linux Kernel package is installed
+    set_fact:
+      kernel_installed: >-
+        {{
+          'linux-image-generic' in ansible_facts.packages or
+          'linux-image-amd64' in ansible_facts.packages or
+          'kernel' in ansible_facts.packages or
+          'kernel-default' in ansible_facts.packages
+        }}
+
+  ##########################
+  # Tasks
+  ##########################
+  - name: CHECK - Get list of active modules
+    command: lsmod
+    register: lsmod_output
+    changed_when: false
+    when: kernel_installed | bool
+
+  - name: CHECK - Parse loaded modules into list
+    set_fact:
+      loaded_modules: "{{ lsmod_output.stdout_lines[1:] | map('split') | map('first') | list }}"
+    when: lsmod_output.stdout_lines is defined
+
+  - name: REPORT - algif_aead module is currently active
+    debug:
+      msg: "WARNING: Kernel module 'algif_aead' is currently loaded on {{ inventory_hostname }}"
+    when:
+      - loaded_modules is defined
+      - "'algif_aead' in loaded_modules"
+
+  - name: REPORT - esp4 module is currently active
+    debug:
+      msg: "WARNING: Kernel module 'esp4' is currently loaded on {{ inventory_hostname }}"
+    when:
+      - loaded_modules is defined
+      - "'esp4' in loaded_modules"
+
+  - name: REPORT - esp6 module is currently active
+    debug:
+      msg: "WARNING: Kernel module 'esp6' is currently loaded on {{ inventory_hostname }}"
+    when:
+      - loaded_modules is defined
+      - "'esp6' in loaded_modules"
+
+  - name: REPORT - rxrpc module is currently active
+    debug:
+      msg: "WARNING: Kernel module 'rxrpc' is currently loaded on {{ inventory_hostname }}"
+    when:
+      - loaded_modules is defined
+      - "'rxrpc' in loaded_modules"
+
+  - name: MITIGATION - Attempt to unload algif_aead module if loaded and not in use
+    command: modprobe -r algif_aead
+    register: unload_algif_aead
+    failed_when: false
+    changed_when: unload_algif_aead.rc == 0
+    when:
+      - loaded_modules is defined
+      - "'algif_aead' in loaded_modules"
+
+  - name: MITIGATION - Attempt to unload esp4 module if loaded and not in use
+    command: modprobe -r esp4
+    register: unload_esp4
+    failed_when: false
+    changed_when: unload_esp4.rc == 0
+    when:
+      - loaded_modules is defined
+      - "'esp4' in loaded_modules"
+
+  - name: MITIGATION - Attempt to unload esp6 module if loaded and not in use
+    command: modprobe -r esp6
+    register: unload_esp6
+    failed_when: false
+    changed_when: unload_esp6.rc == 0
+    when:
+      - loaded_modules is defined
+      - "'esp6' in loaded_modules"
+
+  - name: MITIGATION - Attempt to unload rxrpc module if loaded and not in use
+    command: modprobe -r rxrpc
+    register: unload_rxrpc
+    failed_when: false
+    changed_when: unload_rxrpc.rc == 0
+    when:
+      - loaded_modules is defined
+      - "'rxrpc' in loaded_modules"
+
+  - name: MITIGATION - Persistently disable algif_aead kernel module
+    lineinfile:
+      dest: /etc/modprobe.d/disable-algif_aead.conf
+      regexp: "^install algif_aead"
+      line: "install algif_aead /bin/false"
+      state: present
+      create: yes
+      mode: '0644'
+    register: modprobealgif
+    when: kernel_installed | bool
+
+  - name: MITIGATION - Persistently disable esp4 kernel module
+    lineinfile:
+      dest: /etc/modprobe.d/disable-esp4.conf
+      regexp: "^install esp4"
+      line: "install esp4 /bin/false"
+      state: present
+      create: yes
+      mode: '0644'
+    register: modprobeesp4
+    when: kernel_installed | bool
+
+  - name: MITIGATION - Persistently disable esp6 kernel module
+    lineinfile:
+      dest: /etc/modprobe.d/disable-esp6.conf
+      regexp: "^install esp6"
+      line: "install esp6 /bin/false"
+      state: present
+      create: yes
+      mode: '0644'
+    register: modprobeesp6
+    when: kernel_installed | bool
+
+  - name: MITIGATION - Persistently disable rxrpc kernel module
+    lineinfile:
+      dest: /etc/modprobe.d/disable-rxrpc.conf
+      regexp: "^install rxrpc"
+      line: "install rxrpc /bin/false"
+      state: present
+      create: yes
+      mode: '0644'
+    register: modproberxrpc
+    when: kernel_installed | bool
+
+  - name: MITIGATION - Update initramfs on Debian and Ubuntu
+    command: update-initramfs -u
+    when: 
+      - (modprobealgif.changed | default(false)) or (modprobeesp4.changed | default(false)) or (modprobeesp6.changed | default(false)) or (modproberxrpc.changed | default(false))
+      - ansible_os_family == 'Debian'
+
+  - name: MITIGATION - Update initramfs on SUSE and Amazon Linux
+    command: dracut -f
+    when: 
+      - (modprobeesp4.changed | default(false)) or (modprobeesp6.changed | default(false)) or (modproberxrpc.changed | default(false))
+      - ansible_os_family in ['Suse', 'RedHat'] or ansible_distribution == 'Amazon'
