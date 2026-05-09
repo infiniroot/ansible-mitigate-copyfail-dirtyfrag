@@ -153,5 +153,5 @@
   - name: MITIGATION - Update initramfs on SUSE and Amazon Linux
     command: dracut -f
     when: 
-      - (modprobeesp4.changed | default(false)) or (modprobeesp6.changed | default(false)) or (modproberxrpc.changed | default(false))
+      - (modprobealgif.changed | default(false)) or (modprobeesp4.changed | default(false)) or (modprobeesp6.changed | default(false)) or (modproberxrpc.changed | default(false))
       - ansible_os_family in ['Suse', 'RedHat'] or ansible_distribution == 'Amazon'
