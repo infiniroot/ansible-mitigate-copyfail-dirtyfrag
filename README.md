@@ -1,5 +1,5 @@
-# Ansible playbook to mitigate CopyFail and DirtyFrag vulnerabilities
-Mitigate CopyFail (CVE-2026-31431) and DirtyFrag (CVE-2026-43284) vulnerabilities in the Linux Kernel using a simple but effective Ansible playbook.
+# Ansible playbook to mitigate CopyFail, DirtyFrag and Fragnesia vulnerabilities
+Mitigate CopyFail (CVE-2026-31431), DirtyFrag (CVE-2026-43284) and Fragnesia (CVE-2026-46300) vulnerabilities in the Linux Kernel using a simple but effective Ansible playbook.
 Use this Ansible Playbook to run against your servers or groups. The `target` extra vars option is what you want to use with the host or group entries from your Ansible inventory.
 
 Example: 
